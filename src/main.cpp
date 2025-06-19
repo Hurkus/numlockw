@@ -47,26 +47,6 @@ constexpr uint8_t unhex(char c){
 
 
 /**
- * @brief File sizes are larger than the content.
- *        Line by line reading required.
- */
-static bool readFile(const filesystem::path& path, string& buff){
-	ifstream in = ifstream(path);
-	bool e = false;
-	
-	string line;
-	while (getline(in, line)){
-		if (e)
-			buff.push_back('\n');
-		e = true;
-		buff.append(line);
-	}
-	
-	return e;
-}
-
-
-/**
  * @brief Extract capability bit from bit vector.
  * @param capabilites Bit field of capabilities.
  * @param eventCode Event code defined in `linux/input-event-codes.h`. Eg: `KEY_A`.
@@ -104,31 +84,25 @@ static string getDeviceDescription(const string& name){
 static vector<uint64_t> getDeviceCapabilities(const string& name, const char* capability){
 	assert(capability != nullptr);
 	assert(name.length() > 0);
+	
 	const filesystem::path dev_path = path("/sys/class/input/") / name / "device/capabilities/" / capability;
+	ifstream in = ifstream(dev_path);
 	
 	vector<uint64_t> bits = {};
 	uint64_t hex_group = 0;
 	int bit_count = 0;
 	
-	string data;
-	if (!readFile(dev_path, data)){
-		err:
-		ERROR("Failed to parse device capabilities of device '%s'.", dev_path.c_str());
-		bits.clear();
-		return bits;
-	}
+	// Example: 120013 -> 1100'1000'0000'0000'0100'1000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000
+	// Example: f 2    -> 0100'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000 1111
 	
-	// Read in reverse and decode hex.
-	// Example: 120013 -> 1100'1000'0000'0000'0100'1000
-	// Example: f 2 -> 0100'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000 1111
-	for (int i = int(data.length()) - 1 ; i >= 0 ; i--){
-		const char c = data[i];
+	char c;
+	while (in.get(c)){
 		
 		if (c == '\n'){
 			continue;
 		}
 		
-		// Pad with zero bits.
+		// Padded with zero bits.
 		else if (isspace(c)){
 			bits.push_back(hex_group);
 			hex_group = 0;
@@ -145,12 +119,14 @@ static vector<uint64_t> getDeviceCapabilities(const string& name, const char* ca
 				bit_count = 0;
 			}
 			
-			hex_group |= (uint64_t(hx) << bit_count);
+			hex_group = (hex_group << 4) | (uint64_t(hx) & 0b1111);
 			bit_count += 4;
 		}
 		
 		else {
-			goto err;
+			ERROR("Failed to parse device capabilities of device '%s'.", dev_path.c_str());
+			bits.clear();
+			return bits;
 		}
 		
 	}
@@ -162,7 +138,9 @@ static vector<uint64_t> getDeviceCapabilities(const string& name, const char* ca
 		bit_count = 0;
 	}
 	
-	// cout << data << endl;
+	reverse(bits.begin(), bits.end());
+	
+	// // DEBUG print
 	// for (int i = 0 ; i < bits.size() ; i++){
 	// 	if (i > 0)
 	// 		cout << " ";
