@@ -14,7 +14,7 @@ namespace InputDevice {
  * @param eventId Event type id from `linux/input-event-codes.h`. Example: `EV_KEY`
  * @return `true` if device supports provided event type. Errors also return `false`.
  */
-bool supportsEventType(int fd, uint32_t eventId);
+bool supportsEventType(int fd, uint32_t eventId) noexcept;
 
 
 /**
@@ -23,7 +23,7 @@ bool supportsEventType(int fd, uint32_t eventId);
  * @param keyId Key id from `linux/input-event-codes.h`. Example: `KEY_A`
  * @return `true` if device supports provided key event. Errors also return `false`.
  */
-bool supportsKeyEvent(int fd, uint32_t keyId);
+bool supportsKeyEvent(int fd, uint32_t keyId) noexcept;
 
 
 /**
@@ -32,7 +32,7 @@ bool supportsKeyEvent(int fd, uint32_t keyId);
  * @param ledId LED id from `linux/input-event-codes.h`. Example: `LED_NUML`
  * @return `true` if device supports the provided LED. Errors also return `false`.
  */
-bool supportsLED(int fd, uint32_t ledId);
+bool supportsLED(int fd, uint32_t ledId) noexcept;
 
 
 /**
@@ -42,7 +42,7 @@ bool supportsLED(int fd, uint32_t ledId);
  * @return `true` if LED is turned on.
  * @return `false` if LED is turned off or when an error occured.
  */
-bool getLED(int fd, uint32_t ledId);
+bool getLED(int fd, uint32_t ledId) noexcept;
 
 
 // ----------------------------------- [ Functions ] ---------------------------------------- //
@@ -53,6 +53,12 @@ bool getLED(int fd, uint32_t ledId);
  * @param fd File descriptor of opened event file from `/dev/input/event*`
  */
 std::string getName(int fd);
+
+
+// ----------------------------------- [ Functions ] ---------------------------------------- //
+
+
+bool toggleNumlock(int fd) noexcept;
 
 
 // ------------------------------------------------------------------------------------------ //

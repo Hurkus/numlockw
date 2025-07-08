@@ -4,33 +4,30 @@
 #include <string_view>
 #include <vector>
 #include <algorithm>
-#include <iostream>
-#include <fstream>
 #include <filesystem>
+
 #include <fcntl.h>
 #include <unistd.h>
-
-#include <linux/input-event-codes.h>
 #include <linux/uinput.h>
 
 #include "InputDevice.hpp"
 #include "DEBUG.hpp"
 
 using namespace std;
-using namespace std::filesystem;
 
 
 // ----------------------------------- [ Variables ] ---------------------------------------- //
+
+
+constexpr int KEYPRESS_WAIT_MS = 500;
 
 
 enum class Operation : char {
 	NONE,
 	OFF,
 	ON,
-	TOGGLE,
-	GET
+	TOGGLE
 };
-
 
 struct {
 	bool help = false;
@@ -76,7 +73,7 @@ vector<EventHandler> loadNumlockDevices(){
 	vector<EventHandler> devices = {};
 	int err_count = 0;
 	
-	for (const directory_entry& e : directory_iterator("/dev/input/")){
+	for (const filesystem::directory_entry& e : filesystem::directory_iterator("/dev/input/")){
 		const filesystem::path& handler_path = e.path();
 		
 		// Filter for `event*`
@@ -157,62 +154,83 @@ vector<EventHandler> loadNumlockDevices(const vector<string>& eventHandlers){
 
 // ----------------------------------- [ Functions ] ---------------------------------------- //
 
-/*
-static bool emit(int fd, uint16_t type, uint16_t code, int val){
-	struct input_event event = {
-		.time = {
-			.tv_sec = 0,
-			.tv_usec = 0
-		},
-		.type = type,
-		.code = code,
-		.value = val,
-	};
 
-	return write(fd, &event, sizeof(event)) == sizeof(event);
+static void setNumlock(const vector<EventHandler>& events, bool state){
+	for (const EventHandler& ev : events){
+		assert(ev.fd >= 0);
+		
+		if (!InputDevice::supportsLED(ev.fd, LED_NUML)){
+			WARNING("Failed to determine numlock state of event handler '%s' because it doesn't support an LED.", ev.event.c_str());
+			continue;
+		}
+		
+		const bool led = InputDevice::getLED(ev.fd, LED_NUML);
+		if (led != state){
+			INFO("Toggle %s", ev.path.c_str());
+			
+			if (!InputDevice::toggleNumlock(ev.fd)){
+				ERROR("Failed to set numlock state of event handler '%s'.", ev.event.c_str());
+			}
+			
+			usleep(KEYPRESS_WAIT_MS * 1000);
+		} else {
+			INFO("Skip   %s", ev.path.c_str());
+		}
+		
+	}
 }
 
 
-void f(){
-	int fd = open("/dev/input/event16", O_WRONLY | O_NONBLOCK);
+static bool toggleNumlock(){
+	const int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
 	if (fd < 0){
-		ERROR("err");
-		return;
+		if (errno == EACCES)
+			ERROR("Permission denied when opening event handler '/dev/uinput'.");
+		else
+			ERROR("Failed to open event handler '/dev/uinput'.");
+		return false;
 	}
 	
-	emit(fd, EV_KEY, KEY_NUMLOCK, 1);
-	emit(fd, EV_SYN, SYN_REPORT, 0);
-	emit(fd, EV_KEY, KEY_NUMLOCK, 0);
-	emit(fd, EV_SYN, SYN_REPORT, 0);
+	ioctl(fd, UI_SET_EVBIT, EV_KEY);
+	ioctl(fd, UI_SET_KEYBIT, KEY_NUMLOCK);
 	
+	struct uinput_setup usetup = {
+		.id = {
+			.bustype = BUS_USB,
+			.vendor = 0x1234,
+			.product = 0x5678
+		},
+		.name = "Temporary numlockw"
+	};
+
+	ioctl(fd, UI_DEV_SETUP, &usetup);
+	ioctl(fd, UI_DEV_CREATE);
+	
+	usleep(KEYPRESS_WAIT_MS * 1000);
+	InputDevice::toggleNumlock(fd);
+	usleep(KEYPRESS_WAIT_MS * 1000);
+
+	ioctl(fd, UI_DEV_DESTROY);
 	close(fd);
+	return true;
 }
-*/
+
 
 // ----------------------------------- [ Functions ] ---------------------------------------- //
 
 
-static bool printNumlockDevices(){
-	vector<EventHandler> evs;
-	if (!options.eventHandlers.empty()) {
-		evs = loadNumlockDevices(options.eventHandlers);
-	} else {
-		evs = loadNumlockDevices();
-	}
-	
-	sort(evs.begin(), evs.end(), [](EventHandler& a, EventHandler& b){
+static void printNumlockDevices(vector<EventHandler>& events){
+	sort(events.begin(), events.end(), [](EventHandler& a, EventHandler& b){
 		return strcmp(a.event.c_str(), b.event.c_str());
 	});
 	
-	for (EventHandler& ev : evs){
+	for (EventHandler& ev : events){
 		string name = InputDevice::getName(ev.fd);
 		printf("%-7s", ev.event.c_str());
 		printf("  (%-18s)", ev.path.c_str());
 		printf("  '%s'\n", name.c_str());
 	}
 	
-	closeEventHandlers(evs);
-	return evs.size() > 0;
 }
 
 
@@ -269,8 +287,11 @@ static bool opts(char const* const* argv, int argc){
 			options.operation = Operation::ON;
 		} else if (arg == "toggle" || arg == "x"){
 			options.operation = Operation::TOGGLE;
-		} else if (arg == "get"){
-			options.operation = Operation::GET;
+		}
+		
+		else {
+			ERROR("Unknown option '%s'.", argv[i]);
+			return false;
 		}
 		
 	}
@@ -285,21 +306,50 @@ static bool opts(char const* const* argv, int argc){
 int main(int argc, char const* const* argv){
 	if (!opts(argv, argc)){
 		return 1;
-	}
-	
-	if (options.help){
+	} else if (options.help){
 		printHelp();
 		return 0;
-	} else if (options.list){
-		return printNumlockDevices() ? 0 : 1;
 	}
 	
-	// switch (options.operation){
-	// 	case Operation::ON:
-	// 	case Operation::OFF:
-	// }
+	// Early check for toggle only.
+	if (!options.list && options.operation == Operation::TOGGLE){
+		return toggleNumlock() ? 0 : 1;
+	}
 	
-	return 0;
+	// Get list of numlock event handlers.
+	vector<EventHandler> evs;
+	if (!options.eventHandlers.empty()) {
+		evs = loadNumlockDevices(options.eventHandlers);
+	} else {
+		evs = loadNumlockDevices();
+	}
+	
+	if (evs.empty()){
+		ERROR("No numlock devices listed.");
+		return 1;
+	} else if (options.list){
+		printNumlockDevices(evs);
+		closeEventHandlers(evs);
+		return 0;
+	}
+	
+	bool res = true;
+	switch (options.operation){
+		case Operation::NONE:
+			break;
+		case Operation::ON:
+			setNumlock(evs, true);
+			break;
+		case Operation::OFF:
+			setNumlock(evs, false);
+			break;
+		case Operation::TOGGLE:
+			res = toggleNumlock();
+			break;
+	}
+	
+	closeEventHandlers(evs);
+	return res ? 0 : 1;
 }
 
 

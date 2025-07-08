@@ -1,4 +1,6 @@
 #include "InputDevice.hpp"
+#include <cassert>
+#include <unistd.h>
 #include <linux/uinput.h>
 
 using namespace std;
@@ -17,7 +19,8 @@ inline bool isSet(const uint8_t* bitfield, uint32_t bit){
 // ----------------------------------- [ Functions ] ---------------------------------------- //
 
 
-bool InputDevice::supportsEventType(int fd, uint32_t eventId){
+bool InputDevice::supportsEventType(int fd, uint32_t eventId) noexcept {
+	assert(fd >= 0);
 	uint8_t bitfield[EV_MAX/8 + 1] = {0};
 	
 	const int n = ioctl(fd, EVIOCGBIT(0, sizeof(bitfield)), bitfield);
@@ -29,7 +32,8 @@ bool InputDevice::supportsEventType(int fd, uint32_t eventId){
 }
 
 
-bool InputDevice::supportsKeyEvent(int fd, uint32_t keyId){
+bool InputDevice::supportsKeyEvent(int fd, uint32_t keyId) noexcept {
+	assert(fd >= 0);
 	if (keyId > KEY_MAX){
 		return false;
 	}
@@ -45,7 +49,8 @@ bool InputDevice::supportsKeyEvent(int fd, uint32_t keyId){
 }
 
 
-bool InputDevice::supportsLED(int fd, uint32_t ledId){
+bool InputDevice::supportsLED(int fd, uint32_t ledId) noexcept {
+	assert(fd >= 0);
 	if (ledId > LED_MAX){
 		return false;
 	}
@@ -61,7 +66,8 @@ bool InputDevice::supportsLED(int fd, uint32_t ledId){
 }
 
 
-bool InputDevice::getLED(int fd, uint32_t ledId){
+bool InputDevice::getLED(int fd, uint32_t ledId) noexcept {
+	assert(fd >= 0);
 	if (ledId > LED_MAX){
 		return false;
 	}
@@ -80,6 +86,8 @@ bool InputDevice::getLED(int fd, uint32_t ledId){
 // ----------------------------------- [ Functions ] ---------------------------------------- //
 
 string InputDevice::getName(int fd){
+	assert(fd >= 0);
+	
 	string name;
 	name.resize(64);
 	constexpr int MAX_LEN = 2048;
@@ -97,6 +105,33 @@ string InputDevice::getName(int fd){
 	}
 	
 	return name;
+}
+
+
+// ----------------------------------- [ Functions ] ---------------------------------------- //
+
+
+static bool sendKeyEvent(int fd, uint16_t type, uint16_t code, int val) noexcept {
+	const struct input_event event = {
+		.time = {
+			.tv_sec = 0,
+			.tv_usec = 0
+		},
+		.type = type,
+		.code = code,
+		.value = val,
+	};
+	return write(fd, &event, sizeof(event)) == sizeof(event);
+}
+
+
+bool InputDevice::toggleNumlock(int fd) noexcept {
+	bool e = true;
+	e &= sendKeyEvent(fd, EV_KEY, KEY_NUMLOCK, 1);
+	e &= sendKeyEvent(fd, EV_SYN, SYN_REPORT, 0);
+	e &= sendKeyEvent(fd, EV_KEY, KEY_NUMLOCK, 0);
+	e &= sendKeyEvent(fd, EV_SYN, SYN_REPORT, 0);
+	return e;
 }
 
 
