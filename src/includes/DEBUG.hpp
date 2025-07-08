@@ -28,7 +28,7 @@
 		#define DEBUG_THROW_WARNING 0
 	#endif
 	#ifndef DEBUG_THROW_ERROR
-		#define DEBUG_THROW_ERROR 1
+		#define DEBUG_THROW_ERROR 0
 	#endif
 	#ifndef DEBUG_TIME
 		#define DEBUG_TIME 0
