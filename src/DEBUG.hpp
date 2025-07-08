@@ -21,17 +21,11 @@
 	#ifndef DEBUG_L1
 		#define DEBUG_L1 1
 	#endif
-	#ifndef DEBUG_L2
-		#define DEBUG_L2 1
-	#endif
 	#ifndef DEBUG_THROW_WARNING
 		#define DEBUG_THROW_WARNING 0
 	#endif
 	#ifndef DEBUG_THROW_ERROR
 		#define DEBUG_THROW_ERROR 0
-	#endif
-	#ifndef DEBUG_TIME
-		#define DEBUG_TIME 0
 	#endif
 #else
 	#ifndef DEBUG_L0
@@ -40,17 +34,11 @@
 	#ifndef DEBUG_L1
 		#define DEBUG_L1 0
 	#endif
-	#ifndef DEBUG_L2
-		#define DEBUG_L2 0
-	#endif
 	#ifndef DEBUG_THROW_WARNING
 		#define DEBUG_THROW_WARNING 0
 	#endif
 	#ifndef DEBUG_THROW_ERROR
 		#define DEBUG_THROW_ERROR 0
-	#endif
-	#ifndef DEBUG_TIME
-		#define DEBUG_TIME 0
 	#endif
 #endif
 
@@ -91,37 +79,7 @@
 #endif
 
 
-#if DEBUG_L2 == 1
-	#define ERROR_L2(...)		ERROR(__VA_ARGS__)
-	#define WARNING_L2(...)		WARNING(__VA_ARGS__)
-	#define INFO_L2(...)		INFO(__VA_ARGS__)
-#else
-	#define ERROR_L2(...)
-	#define WARNING_L2(...)
-	#define INFO_L2(...)
-#endif
-
-
 // ---------------------------------- [ Definitions ] --------------------------------------- //
-
-
-#if DEBUG_TIME == 1
-	#include <chrono>
-	#define TIME_NOW()			(std::chrono::high_resolution_clock::now())
-	#define TIME_START(t)		auto timer_##t = TIME_NOW()
-	#define TIME_RESTART(t)		(timer_##t = TIME_NOW())
-	#define TIME_SECONDS(t)		(std::chrono::duration<float>(TIME_NOW() - timer_##t).count())
-	#define TIME_REPORT(t)		INFO(#t ": %.1f ms", TIME_SECONDS(t) * 1000)
-#else
-	#define TIME_NOW()
-	#define TIME_START(t)
-	#define TIME_RESTART(t)
-	#define TIME_SECONDS(t)
-	#define TIME_REPORT(t)
-#endif
-
-
-// ----------------------------------- [ Functions ] ---------------------------------------- //
 
 
 template <typename ...T>

@@ -10,8 +10,8 @@ using namespace std;
 
 
 inline bool isSet(const uint8_t* bitfield, uint32_t bit){
-	const uint32_t byte = bit / 8;
-	const uint32_t _bit = bit % 8;
+	uint32_t byte = bit / 8;
+	bit = bit % 8;
 	return (bitfield[byte] & (1 << bit)) != 0;
 }
 
@@ -95,7 +95,7 @@ string InputDevice::getName(int fd){
 	while (true){
 		const int len = ioctl(fd, EVIOCGNAME(name.size()), name.data());
 		
-		if (len < name.size() || name.size() >= MAX_LEN){
+		if (len < int(name.size()) || name.size() >= MAX_LEN){
 			name.resize(len);
 			break;
 		} else {
