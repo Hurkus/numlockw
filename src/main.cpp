@@ -77,7 +77,8 @@ void sortEventHandlers(vector<string>& handlers){
 
 static bool printEventHandlers(const vector<string>& handlers){
 	filesystem::path path;
-	uint32_t err_perm_count = 0;
+	uint32_t err_count = 0;
+	bool err_perm = false;
 	
 	for (const string& event : handlers){
 		path.assign("/dev/input/").append(event);
@@ -85,8 +86,8 @@ static bool printEventHandlers(const vector<string>& handlers){
 		// Open event device and check for permission errors.
 		const int fd = open(path.c_str(), O_WRONLY | O_NONBLOCK);
 		if (fd < 0){
-			if (errno == EACCES)
-				err_perm_count++;
+			err_count++;
+			err_perm |= (errno == EACCES);
 			continue;
 		}
 		
@@ -101,22 +102,25 @@ static bool printEventHandlers(const vector<string>& handlers){
 	}
 	
 	// Permission error.
-	if (err_perm_count > 0){
+	if (err_count > 0){
+		if (err_perm)
+			ERROR("Permission denied.");
 		if (handlers.size() == 1)
-			ERROR("Permission denied when accessing event handler '/dev/input/%s'.", handlers.front().c_str());
-		else if (handlers.size() == err_perm_count)
-			ERROR("Failed to accessing and check %d event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+			ERROR("Failed to access event handler '/dev/input/%s'.", handlers.front().c_str());
+		else if (handlers.size() == err_count)
+			ERROR("Failed to access %d event handlers from '/dev/input/'.", err_count);
 		else
-			WARNING("Failed to accessing and check a few (%d) event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+			WARNING("Failed to access a few (%d) event handlers from '/dev/input/'.", err_count);
 	}
 	
-	return err_perm_count == 0;
+	return err_count == 0;
 }
 
 
 static bool setNumlock(const vector<string>& handlers, bool state){
 	filesystem::path path;
-	uint32_t err_perm_count = 0;
+	uint32_t err_count = 0;
+	bool err_perm = false;
 	
 	for (const string& event : handlers){
 		path.assign("/dev/input/").append(event);
@@ -124,8 +128,8 @@ static bool setNumlock(const vector<string>& handlers, bool state){
 		// Open event device and check for permission errors.
 		const int fd = open(path.c_str(), O_WRONLY | O_NONBLOCK);
 		if (fd < 0){
-			if (errno == EACCES)
-				err_perm_count++;
+			err_count++;
+			err_perm |= (errno == EACCES);
 			continue;
 		}
 		
@@ -154,22 +158,25 @@ static bool setNumlock(const vector<string>& handlers, bool state){
 	}
 	
 	// Permission error.
-	if (err_perm_count > 0){
+	if (err_count > 0){
+		if (err_perm)
+			ERROR("Permission denied.");
 		if (handlers.size() == 1)
-			ERROR("Permission denied when accessing event handler '/dev/input/%s'.", handlers.front().c_str());
-		else if (handlers.size() == err_perm_count)
-			ERROR("Failed to accessing and check %d event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+			ERROR("Failed to access event handler '/dev/input/%s'.", handlers.front().c_str());
+		else if (handlers.size() == err_count)
+			ERROR("Failed to access %d event handlers from '/dev/input/'.", err_count);
 		else
-			WARNING("Failed to accessing and check a few (%d) event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+			WARNING("Failed to access a few (%d) event handlers from '/dev/input/'.", err_count);
 	}
 	
-	return err_perm_count == 0;
+	return err_count == 0;
 }
 
 
 static bool toggleNumlock(const vector<string>& handlers){
 	filesystem::path path;
-	uint32_t err_perm_count = 0;
+	uint32_t err_count = 0;
+	bool err_perm = false;
 	
 	for (const string& event : handlers){
 		path.assign("/dev/input/").append(event);
@@ -177,8 +184,8 @@ static bool toggleNumlock(const vector<string>& handlers){
 		// Open event device and check for permission errors.
 		const int fd = open(path.c_str(), O_WRONLY | O_NONBLOCK);
 		if (fd < 0){
-			if (errno == EACCES)
-				err_perm_count++;
+			err_count++;
+			err_perm |= (errno == EACCES);
 			continue;
 		}
 		
@@ -192,16 +199,18 @@ static bool toggleNumlock(const vector<string>& handlers){
 	}
 	
 	// Permission error.
-	if (err_perm_count > 0){
+	if (err_count > 0){
+		if (err_perm)
+			ERROR("Permission denied.");
 		if (handlers.size() == 1)
-			ERROR("Permission denied when accessing event handler '/dev/input/%s'.", handlers.front().c_str());
-		else if (handlers.size() == err_perm_count)
-			ERROR("Failed to accessing and check %d event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+			ERROR("Failed to access event handler '/dev/input/%s'.", handlers.front().c_str());
+		else if (handlers.size() == err_count)
+			ERROR("Failed to access %d event handlers from '/dev/input/'.", err_count);
 		else
-			WARNING("Failed to accessing and check a few (%d) event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+			WARNING("Failed to access a few (%d) event handlers from '/dev/input/'.", err_count);
 	}
 	
-	return err_perm_count == 0;
+	return err_count == 0;
 }
 
 
@@ -211,9 +220,9 @@ static bool toggleVirtualNumlock(){
 	const int fd = open(cpath, O_WRONLY | O_NONBLOCK);
 	if (fd < 0){
 		if (errno == EACCES)
-			ERROR("Permission denied when accessing event handler '%s'.", cpath);
+			ERROR("Permission denied when accessing '%s'.", cpath);
 		else
-			ERROR("Failed to access event handler '%s'.", cpath);
+			ERROR("Failed to access '%s'.", cpath);
 		return false;
 	}
 	
