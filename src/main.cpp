@@ -1,8 +1,7 @@
 #include <cassert>
 #include <cerrno>
-#include <cstring>
-#include <string_view>
 #include <vector>
+#include <string_view>
 #include <algorithm>
 #include <filesystem>
 
@@ -16,17 +15,13 @@
 using namespace std;
 
 
-// ------------------------------------------------------------------------------------------ //
+// ----------------------------------- [ Constants ] ---------------------------------------- //
 
 
 constexpr int KEYPRESS_WAIT_MS = 500;
 
 
-struct EventHandler {
-	filesystem::path path;
-	string event;
-	int fd = -1;
-};
+// ----------------------------------- [ Variables ] ---------------------------------------- //
 
 
 enum class Operation : char {
@@ -47,144 +42,178 @@ struct {
 // ----------------------------------- [ Functions ] ---------------------------------------- //
 
 
-void closeEventHandlers(vector<EventHandler>& v){
-	for (EventHandler& ev : v){
-		if (ev.fd >= 0){
-			close(ev.fd);
-			ev.fd = -1;
-		}
-	}
-}
-
-
-static bool supportsNumlock(int fd){
-	assert(fd >= 0);
-	return InputDevice::supportsEventType(fd, EV_KEY) && InputDevice::supportsKeyEvent(fd, KEY_NUMLOCK);
-}
-
-
-// ----------------------------------- [ Functions ] ---------------------------------------- //
-
-
-vector<EventHandler> loadNumlockDevices(){
-	vector<EventHandler> devices = {};
-	int err_count = 0;
-	
-	for (const filesystem::directory_entry& e : filesystem::directory_iterator("/dev/input/")){
-		const filesystem::path& handler_path = e.path();
+static bool getAllEventHandlers(vector<string>& handlers) noexcept {
+	try {
 		
-		// Filter for `event*`
-		if (e.is_directory()){
-			continue;
-		} if (!handler_path.filename().string().starts_with("event")){
-			continue;
-		}
-		
-		// Open event device and check for permission errors.
-		const int fd = open(handler_path.c_str(), O_WRONLY | O_NONBLOCK);
-		if (fd < 0){
-			if (errno == EACCES)
-				err_count++;
-			continue;
-		}
-		
-		if (!supportsNumlock(fd)){
-			close(fd);
-			continue;
-		}
-		
-		EventHandler& ev = devices.emplace_back();
-		ev.path = move(handler_path);
-		ev.event = ev.path.filename();
-		ev.fd = fd;
-	}
-	
-	if (err_count > 0){
-		if (devices.size() <= 0)
-			WARNING("Failed to open and check a few (%d) event handlers from '/dev/input/' due to lack of permissions.", err_count);
-		else
-			WARNING("Permission denied when opening event handlers at '/dev/input/'.", err_count);
-	} else if (devices.size() <= 0){
-		WARNING("Missing event handlers at '/dev/input/'.", err_count);
-	}
-	
-	return devices;
-}
-
-
-vector<EventHandler> loadNumlockDevices(const vector<string>& eventHandlers){
-	vector<EventHandler> devices = {};
-	
-	for (const string& ev_name : eventHandlers){
-		filesystem::path handler_path = filesystem::path("/dev/input") / ev_name;
-		
-		if (!filesystem::exists(handler_path)){
-			WARNING("Event handler '%s' not found.", handler_path.c_str());
-			continue;
-		}
-		
-		// Open event device and check for permission errors.
-		const int fd = open(handler_path.c_str(), O_WRONLY | O_NONBLOCK);
-		if (fd < 0){
-			if (errno == EACCES)
-				WARNING("Permission denied when opening event handler '%s'.", handler_path.c_str());
-			else
-				WARNING("Failed to open event handler '%s'.", handler_path.c_str());
-			continue;
-		}
-		
-		if (!supportsNumlock(fd)){
-			close(fd);
-			WARNING("Event handler '%s' does not support numlock.", handler_path.c_str());
-			continue;
-		}
-		
-		EventHandler& ev = devices.emplace_back();
-		ev.path = move(handler_path);
-		ev.event = ev.path.filename();
-		ev.fd = fd;
-	}
-	
-	return devices;
-}
-
-
-// ----------------------------------- [ Functions ] ---------------------------------------- //
-
-
-static void setNumlock(const vector<EventHandler>& events, bool state){
-	for (const EventHandler& ev : events){
-		assert(ev.fd >= 0);
-		
-		if (!InputDevice::supportsLED(ev.fd, LED_NUML)){
-			WARNING("Failed to determine numlock state of event handler '%s' because it doesn't support an LED.", ev.event.c_str());
-			continue;
-		}
-		
-		const bool led = InputDevice::getLED(ev.fd, LED_NUML);
-		if (led != state){
-			INFO("Toggle %s", ev.path.c_str());
+		for (const filesystem::directory_entry& e : filesystem::directory_iterator("/dev/input/")){
+			if (e.is_directory()){
+				continue;
+			}
 			
-			if (!InputDevice::toggleNumlock(ev.fd)){
-				ERROR("Failed to set numlock state of event handler '%s'.", ev.event.c_str());
+			string name = e.path().filename().string();
+			if (name.starts_with("event")){
+				handlers.emplace_back(move(name));
+			}
+			
+		}
+		
+	} catch (const exception& e){
+		ERROR("Failed to list event handlers at '/dev/input/'.");
+		return false;
+	}
+	return true;
+}
+
+
+void sortEventHandlers(vector<string>& handlers){
+	sort(handlers.begin(), handlers.end(), [](const string& a, const string& b){
+		return a.length() < b.length() || a < b;
+	});
+}
+
+
+// ----------------------------------- [ Functions ] ---------------------------------------- //
+
+
+static bool printEventHandlers(const vector<string>& handlers){
+	filesystem::path path;
+	uint32_t err_perm_count = 0;
+	
+	for (const string& event : handlers){
+		path.assign("/dev/input/").append(event);
+		
+		// Open event device and check for permission errors.
+		const int fd = open(path.c_str(), O_WRONLY | O_NONBLOCK);
+		if (fd < 0){
+			if (errno == EACCES)
+				err_perm_count++;
+			continue;
+		}
+		
+		// Print only numlock events.
+		if (InputDevice::supportsKeyEvent(fd, KEY_NUMLOCK)){
+			printf("%-7s", event.c_str());
+			printf("  (%-18s)", path.c_str());
+			printf("  '%s'\n", InputDevice::getName(fd).c_str());
+		}
+		
+		close(fd);
+	}
+	
+	// Permission error.
+	if (err_perm_count > 0){
+		if (handlers.size() == 1)
+			ERROR("Permission denied when accessing event handler '/dev/input/%s'.", handlers.front().c_str());
+		else if (handlers.size() == err_perm_count)
+			ERROR("Failed to accessing and check %d event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+		else
+			WARNING("Failed to accessing and check a few (%d) event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+	}
+	
+	return err_perm_count == 0;
+}
+
+
+static bool setNumlock(const vector<string>& handlers, bool state){
+	filesystem::path path;
+	uint32_t err_perm_count = 0;
+	
+	for (const string& event : handlers){
+		path.assign("/dev/input/").append(event);
+		
+		// Open event device and check for permission errors.
+		const int fd = open(path.c_str(), O_WRONLY | O_NONBLOCK);
+		if (fd < 0){
+			if (errno == EACCES)
+				err_perm_count++;
+			continue;
+		}
+		
+		// Check for LED and numlock support
+		if (!InputDevice::supportsKeyEvent(fd, KEY_NUMLOCK)){
+			goto next;
+		} else if (!InputDevice::supportsLED(fd, LED_NUML)){
+			WARNING("Failed to determine numlock state of event handler '%s' because it doesn't support an LED.", event.c_str());
+			goto next;
+		}
+		
+		if (InputDevice::getLED(fd, LED_NUML) != state){
+			INFO("Toggle %s", path.c_str());
+			
+			if (!InputDevice::toggleNumlock(fd)){
+				ERROR("Failed to set numlock state of event handler '%s'.", event.c_str());
 			}
 			
 			usleep(KEYPRESS_WAIT_MS * 1000);
 		} else {
-			INFO("Skip   %s", ev.path.c_str());
+			INFO("Skip   %s", path.c_str());
 		}
 		
+		next:
+		close(fd);
 	}
+	
+	// Permission error.
+	if (err_perm_count > 0){
+		if (handlers.size() == 1)
+			ERROR("Permission denied when accessing event handler '/dev/input/%s'.", handlers.front().c_str());
+		else if (handlers.size() == err_perm_count)
+			ERROR("Failed to accessing and check %d event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+		else
+			WARNING("Failed to accessing and check a few (%d) event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+	}
+	
+	return err_perm_count == 0;
 }
 
 
-static bool toggleNumlock(){
-	const int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+static bool toggleNumlock(const vector<string>& handlers){
+	filesystem::path path;
+	uint32_t err_perm_count = 0;
+	
+	for (const string& event : handlers){
+		path.assign("/dev/input/").append(event);
+		
+		// Open event device and check for permission errors.
+		const int fd = open(path.c_str(), O_WRONLY | O_NONBLOCK);
+		if (fd < 0){
+			if (errno == EACCES)
+				err_perm_count++;
+			continue;
+		}
+		
+		// Send key press event
+		if (InputDevice::supportsKeyEvent(fd, KEY_NUMLOCK)){
+			if (!InputDevice::toggleNumlock(fd))
+				ERROR("Failed to toggle numlock state of event handler '%s'.", event.c_str());
+		}
+		
+		close(fd);
+	}
+	
+	// Permission error.
+	if (err_perm_count > 0){
+		if (handlers.size() == 1)
+			ERROR("Permission denied when accessing event handler '/dev/input/%s'.", handlers.front().c_str());
+		else if (handlers.size() == err_perm_count)
+			ERROR("Failed to accessing and check %d event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+		else
+			WARNING("Failed to accessing and check a few (%d) event handlers from '/dev/input/' due to lack of permissions.", err_perm_count);
+	}
+	
+	return err_perm_count == 0;
+}
+
+
+static bool toggleVirtualNumlock(){
+	const char* cpath = "/dev/uinput";
+	
+	const int fd = open(cpath, O_WRONLY | O_NONBLOCK);
 	if (fd < 0){
 		if (errno == EACCES)
-			ERROR("Permission denied when opening event handler '/dev/uinput'.");
+			ERROR("Permission denied when accessing event handler '%s'.", cpath);
 		else
-			ERROR("Failed to open event handler '/dev/uinput'.");
+			ERROR("Failed to access event handler '%s'.", cpath);
 		return false;
 	}
 	
@@ -204,6 +233,7 @@ static bool toggleNumlock(){
 	ioctl(fd, UI_DEV_CREATE);
 	
 	usleep(KEYPRESS_WAIT_MS * 1000);
+	INFO("Toggle %s", cpath);
 	InputDevice::toggleNumlock(fd);
 	usleep(KEYPRESS_WAIT_MS * 1000);
 
@@ -214,21 +244,6 @@ static bool toggleNumlock(){
 
 
 // ----------------------------------- [ Functions ] ---------------------------------------- //
-
-
-static void printNumlockDevices(vector<EventHandler>& events){
-	sort(events.begin(), events.end(), [](EventHandler& a, EventHandler& b){
-		return strcmp(a.event.c_str(), b.event.c_str());
-	});
-	
-	for (EventHandler& ev : events){
-		string name = InputDevice::getName(ev.fd);
-		printf("%-7s", ev.event.c_str());
-		printf("  (%-18s)", ev.path.c_str());
-		printf("  '%s'\n", name.c_str());
-	}
-	
-}
 
 
 static void printHelp(){
@@ -308,44 +323,39 @@ int main(int argc, char const* const* argv){
 		return 0;
 	}
 	
-	// Early check for toggle only.
-	if (!options.list && options.operation == Operation::TOGGLE){
-		return toggleNumlock() ? 0 : 1;
+	vector<string>& evh = options.eventHandlers;
+	
+	// Enumerate and print numlock event handlers.
+	if (options.list){
+		if (evh.empty() && !getAllEventHandlers(evh)){
+			return 1;
+		} else {
+			sortEventHandlers(evh);
+			printEventHandlers(evh);
+			return 0;
+		}
 	}
 	
-	// Get list of numlock event handlers.
-	vector<EventHandler> evs;
-	if (!options.eventHandlers.empty()) {
-		evs = loadNumlockDevices(options.eventHandlers);
-	} else {
-		evs = loadNumlockDevices();
-	}
-	
-	if (evs.empty()){
-		ERROR("No numlock devices listed.");
-		return 1;
-	} else if (options.list){
-		printNumlockDevices(evs);
-		closeEventHandlers(evs);
-		return 0;
-	}
-	
-	bool res = true;
+	bool res = false;
 	switch (options.operation){
 		case Operation::NONE:
 			break;
+		
 		case Operation::ON:
-			setNumlock(evs, true);
-			break;
 		case Operation::OFF:
-			setNumlock(evs, false);
+			if (!evh.empty() || getAllEventHandlers(evh))
+				res = setNumlock(evh, options.operation == Operation::ON);
 			break;
+		
 		case Operation::TOGGLE:
-			res = toggleNumlock();
+			if (evh.empty())
+				res = toggleVirtualNumlock();
+			else
+				res = toggleNumlock(evh);
 			break;
+		
 	}
 	
-	closeEventHandlers(evs);
 	return res ? 0 : 1;
 }
 
