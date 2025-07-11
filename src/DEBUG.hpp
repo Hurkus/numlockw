@@ -1,6 +1,5 @@
 #pragma once
 #include <ostream>
-#include <cassert>
 #include "ANSI.h"
 
 
@@ -14,68 +13,17 @@
 #endif
 
 
-#ifdef DEBUG
-	#ifndef DEBUG_L0
-		#define DEBUG_L0 1
-	#endif
-	#ifndef DEBUG_L1
-		#define DEBUG_L1 1
-	#endif
-	#ifndef DEBUG_THROW_WARNING
-		#define DEBUG_THROW_WARNING 0
-	#endif
-	#ifndef DEBUG_THROW_ERROR
-		#define DEBUG_THROW_ERROR 0
-	#endif
-#else
-	#ifndef DEBUG_L0
-		#define DEBUG_L0 0
-	#endif
-	#ifndef DEBUG_L1
-		#define DEBUG_L1 0
-	#endif
-	#ifndef DEBUG_THROW_WARNING
-		#define DEBUG_THROW_WARNING 0
-	#endif
-	#ifndef DEBUG_THROW_ERROR
-		#define DEBUG_THROW_ERROR 0
-	#endif
-#endif
-
-
 // ---------------------------------- [ Definitions ] --------------------------------------- //
 
 
 #ifdef DEBUG
 	#define ERROR(...)		::errorf(__FILE__, size_t(__LINE__), __VA_ARGS__)
-	#define INFO(...)		::infof(__FILE__, size_t(__LINE__), __VA_ARGS__)
 	#define WARNING(...)	::warnf(__FILE__, size_t(__LINE__), __VA_ARGS__)
+	#define INFO(...)		::infof(__FILE__, size_t(__LINE__), __VA_ARGS__)
 #else
-	#define INFO(...)		::info(__VA_ARGS__)
 	#define ERROR(...)		::error(__VA_ARGS__)
 	#define WARNING(...)	::warn(__VA_ARGS__)
-#endif
-
-
-#if DEBUG_L0 == 1
-	#define ERROR_L0(...)		ERROR(__VA_ARGS__)
-	#define WARNING_L0(...)		WARNING(__VA_ARGS__)
-	#define INFO_L0(...)		INFO(__VA_ARGS__)
-#else
-	#define ERROR_L0(...)
-	#define WARNING_L0(...)
-	#define INFO_L0(...)
-#endif
-
-
-#if DEBUG_L1 == 1
-	#define ERROR_L1(...)		ERROR(__VA_ARGS__)
-	#define WARNING_L1(...)		WARNING(__VA_ARGS__)
-	#define INFO_L1(...)		INFO(__VA_ARGS__)
-#else
-	#define ERROR_L1(...)
-	#define WARNING_L1(...)
-	#define INFO_L1(...)
+	#define INFO(...)
 #endif
 
 
@@ -87,10 +35,6 @@ static void error(const char* fmt, T... arg){
 	std::fprintf(stderr, ANSI_RED "error: " ANSI_RESET);
 	std::fprintf(stderr, fmt, arg...);
 	std::fprintf(stderr, "\n");
-	
-	#if DEBUG_THROW_ERROR == 1
-		exit(1);
-	#endif
 }
 
 template <typename ...T>
@@ -99,10 +43,6 @@ static void errorf(const char* file, size_t line, const char* fmt, T... arg){
 	std::fprintf(stderr, ANSI_RED "error: " ANSI_RESET);
 	std::fprintf(stderr, fmt, arg...);
 	std::fprintf(stderr, "\n");
-	
-	#if DEBUG_THROW_ERROR == 1
-		exit(1);
-	#endif
 }
 
 
@@ -111,10 +51,6 @@ static void warn(const char* fmt, T... arg){
 	std::fprintf(stderr, ANSI_YELLOW ANSI_BOLD "warn: " ANSI_RESET);
 	std::fprintf(stderr, fmt, arg...);
 	std::fprintf(stderr, "\n");
-	
-	#if DEBUG_THROW_WARNING == 1
-		exit(1);
-	#endif
 }
 
 template <typename ...T>
@@ -123,10 +59,6 @@ static void warnf(const char* file, size_t line, const char* fmt, T... arg){
 	std::fprintf(stderr, ANSI_YELLOW ANSI_BOLD "warn: " ANSI_RESET);
 	std::fprintf(stderr, fmt, arg...);
 	std::fprintf(stderr, "\n");
-	
-	#if DEBUG_THROW_WARNING == 1
-		exit(1);
-	#endif
 }
 
 

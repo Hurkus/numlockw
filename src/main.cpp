@@ -163,7 +163,7 @@ static void setNumlock(const vector<EventHandler>& events, bool state){
 		
 		const bool led = InputDevice::getLED(ev.fd, LED_NUML);
 		if (led != state){
-			INFO_L1("Toggle %s", ev.path.c_str());
+			INFO("Toggle %s", ev.path.c_str());
 			
 			if (!InputDevice::toggleNumlock(ev.fd)){
 				ERROR("Failed to set numlock state of event handler '%s'.", ev.event.c_str());
@@ -171,7 +171,7 @@ static void setNumlock(const vector<EventHandler>& events, bool state){
 			
 			usleep(KEYPRESS_WAIT_MS * 1000);
 		} else {
-			INFO_L1("Skip   %s", ev.path.c_str());
+			INFO("Skip   %s", ev.path.c_str());
 		}
 		
 	}
