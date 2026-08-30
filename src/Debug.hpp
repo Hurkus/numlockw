@@ -1,22 +1,24 @@
 #pragma once
-#include <ostream>
+#include <iosfwd>
 #include "ANSI.h"
 
 
 // ---------------------------------- [ Definitions ] --------------------------------------- //
 
 
-#ifdef NDEBUG
-	#undef DEBUG
-#else
-	#define DEBUG
+#ifndef DEBUG
+	#ifdef NDEBUG
+		#define DEBUG 0
+	#else
+		#define DEBUG 1
+	#endif
 #endif
 
 
 // ---------------------------------- [ Definitions ] --------------------------------------- //
 
 
-#ifdef DEBUG
+#if DEBUG
 	#define ERROR(...)		::errorf(__FILE__, size_t(__LINE__), __VA_ARGS__)
 	#define WARNING(...)	::warnf(__FILE__, size_t(__LINE__), __VA_ARGS__)
 	#define INFO(...)		::infof(__FILE__, size_t(__LINE__), __VA_ARGS__)

@@ -10,7 +10,7 @@
 #include <linux/uinput.h>
 
 #include "InputDevice.hpp"
-#include "DEBUG.hpp"
+#include "Debug.hpp"
 
 using namespace std;
 
@@ -65,9 +65,13 @@ static bool getAllEventHandlers(vector<string>& handlers) noexcept {
 }
 
 
-void sortEventHandlers(vector<string>& handlers){
+static void sortEventHandlers(vector<string>& handlers){
 	sort(handlers.begin(), handlers.end(), [](const string& a, const string& b){
-		return a.length() < b.length() || a < b;
+		if (a.length() < b.length())
+			return true;
+		else if (a.length() == b.length())
+			return a < b;
+		return false;
 	});
 }
 
